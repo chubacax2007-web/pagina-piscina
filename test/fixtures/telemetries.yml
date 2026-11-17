@@ -1,0 +1,45 @@
+# Read about fixtures at https://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  hand: MyString
+  is_left: false
+  battery: 1
+  battery_voltage: 1.5
+  charging_qi: false
+  uptime_sec: 1
+  elbow_angle: 1
+  elbow_min: 1
+  elbow_max: 1
+  shoulder_angle: 1
+  shoulder_min: 1
+  shoulder_max: 1
+  phase_entry: 1
+  phase_pull: 1
+  phase_push: 1
+  force_n: 1
+  force_left: 1
+  force_right: 1
+  strokes: 1
+  stroke_rate: 1.5
+
+two:
+  hand: MyString
+  is_left: false
+  battery: 1
+  battery_voltage: 1.5
+  charging_qi: false
+  uptime_sec: 1
+  elbow_angle: 1
+  elbow_min: 1
+  elbow_max: 1
+  shoulder_angle: 1
+  shoulder_min: 1
+  shoulder_max: 1
+  phase_entry: 1
+  phase_pull: 1
+  phase_push: 1
+  force_n: 1
+  force_left: 1
+  force_right: 1
+  strokes: 1
+  stroke_rate: 1.5
