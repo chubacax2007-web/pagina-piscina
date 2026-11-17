@@ -11,14 +11,35 @@ module Api
         "start_timestamp" => nil, "reaction_time" => 0.62, "turn_time" => 1.18
       }
 
+      @@last_pad_touch = {
+        "pad_side" => "SIN TOQUES",
+        "sensor_triggered" => 0,
+        "peak_value" => 0,
+        "contact_time" => 0.0,
+        "timestamp" => "--:--:--"
+      }
+
       def index
-        render json: Telemetry.order(created_at: :desc).limit(20)
+        render json: Telemetry.order(created_at: :desc).limit(30)
       end
 
       def create
         telemetry = Telemetry.new(telemetry_params)
         if telemetry.save
-          render json: { status: "ok", active_session: @@active_pool_session["active"], pool_session_active: @@active_pool_session["active"] }, status: :created
+          # Si el envío proviene de la plataforma FSR, actualiza también el tiempo de contacto en la sesión activa
+          if telemetry.hand.to_s.start_with?("PAD_") && @@active_pool_session["active"]
+            if telemetry.stroke_rate.to_f > 0
+              @@active_pool_session["turn_time"] = telemetry.stroke_rate.to_f.round(2)
+            elsif telemetry.uptime_sec.to_i > 0
+              @@active_pool_session["turn_time"] = telemetry.uptime_sec.to_f.round(2)
+            end
+          end
+
+          render json: {
+            status: "ok",
+            active_session: @@active_pool_session["active"],
+            pool_session_active: @@active_pool_session["active"]
+          }, status: :created
         else
           render json: { error: telemetry.errors.full_messages }, status: :unprocessable_entity
         end
@@ -26,51 +47,34 @@ module Api
 
       def smartwatch_status
         last = Telemetry.order(created_at: :desc).first
-        if last && (Time.now - last.created_at) <= 12
-          render json: {
-            connected: true,
-            hand: last.hand || "Izquierda (Left)",
-            is_left: last.is_left.nil? ? true : last.is_left,
-            battery: last.battery || 100,
-            uptime_sec: last.uptime_sec || 0,
-            elbow_angle: last.elbow_angle || 0,
-            elbow_min: last.elbow_min || 0,
-            elbow_max: last.elbow_max || 0,
-            shoulder_angle: last.shoulder_angle || 0,
-            shoulder_min: last.shoulder_min || 0,
-            shoulder_max: last.shoulder_max || 0,
-            phase_entry: last.phase_entry || 0,
-            phase_pull: last.phase_pull || 0,
-            phase_push: last.phase_push || 0,
-            force_n: last.force_n || 0,
-            force_left: last.force_left || 0,
-            force_right: last.force_right || 0,
-            strokes: last.strokes || 0,
-            stroke_rate: last.stroke_rate || 55.4
-          }
-        else
-          render json: {
-            connected: false,
-            hand: last&.hand || "Izquierda (Left)",
-            is_left: true,
-            battery: last&.battery || 100,
-            uptime_sec: last&.uptime_sec || 0,
-            elbow_angle: last&.elbow_angle || 0,
-            elbow_min: last&.elbow_min || 0,
-            elbow_max: last&.elbow_max || 0,
-            shoulder_angle: last&.shoulder_angle || 0,
-            shoulder_min: last&.shoulder_min || 0,
-            shoulder_max: last&.shoulder_max || 0,
-            phase_entry: last&.phase_entry || 0,
-            phase_pull: last&.phase_pull || 0,
-            phase_push: last&.phase_push || 0,
-            force_n: last&.force_n || 0,
-            force_left: last&.force_left || 0,
-            force_right: last&.force_right || 0,
-            strokes: last&.strokes || 0,
-            stroke_rate: last&.stroke_rate || 55.4
-          }
-        end
+        connected = last && (Time.now - last.created_at) <= 15
+
+        render json: {
+          connected: !!connected,
+          hand: last&.hand || "Izquierda (Left)",
+          is_left: last.nil? || last.is_left.nil? ? true : last.is_left,
+          battery: last&.battery || 100,
+          uptime_sec: last&.uptime_sec || 0,
+          elbow_angle: last&.elbow_angle || 0,
+          elbow_min: last&.elbow_min || 0,
+          elbow_max: last&.elbow_max || 0,
+          shoulder_angle: last&.shoulder_angle || 0,
+          shoulder_min: last&.shoulder_min || 0,
+          shoulder_max: last&.shoulder_max || 0,
+          phase_entry: last&.phase_entry || 0,
+          phase_pull: last&.phase_pull || 0,
+          phase_push: last&.phase_push || 0,
+          force_n: last&.force_n || 0,
+          force_left: last&.force_left || 0,
+          force_right: last&.force_right || 0,
+          strokes: last&.strokes || 0,
+          stroke_rate: last&.stroke_rate || 55.4,
+          pad_side: @@last_pad_touch["pad_side"],
+          pad_sensor: @@last_pad_touch["sensor_triggered"],
+          pad_peak: @@last_pad_touch["peak_value"],
+          pad_contact_time: @@last_pad_touch["contact_time"],
+          pad_time: @@last_pad_touch["timestamp"]
+        }
       end
 
       def athletes
@@ -176,7 +180,7 @@ module Api
         split_50 = (dist_m <= 50 ? elapsed : (elapsed / (dist_m / 50.0))).round(2)
 
         last = Telemetry.order(created_at: :desc).first
-        sw_active = last && (Time.now - last.created_at) <= 20
+        sw_active = last && (Time.now - last.created_at) <= 60
 
         elbow_avg = (sw_active && last.elbow_angle.to_i > 0) ? last.elbow_angle : 89
         elbow_min = (sw_active && last.elbow_min.to_i > 0) ? last.elbow_min : [0, elbow_avg - 3].max
@@ -253,17 +257,44 @@ module Api
       end
 
       def pool_pad_touch
-        pad_side = params[:pad_side] || "SALIDA_META"
+        pad_side = params[:pad_side] || "VUELTA_50M"
+        sensor_num = params[:sensor_triggered].to_i
         peak_val = params[:peak_value].to_i
+        contact_sec = params[:contact_time].to_f.round(2)
+
+        @@last_pad_touch = {
+          "pad_side" => pad_side,
+          "sensor_triggered" => sensor_num,
+          "peak_value" => peak_val,
+          "contact_time" => contact_sec,
+          "timestamp" => Time.now.strftime("%H:%M:%S")
+        }
+
         if @@active_pool_session["active"] && @@active_pool_session["start_timestamp"]
-          elapsed = Time.now.to_f - @@active_pool_session["start_timestamp"].to_f
-          if elapsed < 3.0 && pad_side == "SALIDA_META"
-            @@active_pool_session["reaction_time"] = [[0.45, elapsed].max, 0.85].min.round(2)
-          elsif pad_side == "VUELTA_50M"
-            @@active_pool_session["turn_time"] = (1.05 + (peak_val % 30) * 0.01).round(2)
+          if contact_sec > 0
+            if pad_side == "SALIDA_META"
+              @@active_pool_session["reaction_time"] = contact_sec
+            else
+              @@active_pool_session["turn_time"] = contact_sec
+            end
+          else
+            elapsed = Time.now.to_f - @@active_pool_session["start_timestamp"].to_f
+            if elapsed < 3.0 && pad_side == "SALIDA_META"
+              @@active_pool_session["reaction_time"] = [[0.45, elapsed].max, 0.85].min.round(2)
+            elsif pad_side == "VUELTA_50M"
+              @@active_pool_session["turn_time"] = (1.05 + (peak_val % 30) * 0.01).round(2)
+            end
           end
         end
-        render json: { status: "ok", pad_side: pad_side, active_session: @@active_pool_session["active"] }
+
+        render json: {
+          status: "ok",
+          pad_side: pad_side,
+          sensor_triggered: sensor_num,
+          peak_value: peak_val,
+          contact_time: contact_sec,
+          active_session: @@active_pool_session["active"]
+        }
       end
 
       private
