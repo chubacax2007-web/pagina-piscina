@@ -26,6 +26,7 @@ module Api
       def create
         telemetry = Telemetry.new(telemetry_params)
         if telemetry.save
+          MqttPublisher.publish_telemetry(@telemetry)
           # Si el envío proviene de la plataforma FSR, actualiza también el tiempo de contacto en la sesión activa
           if telemetry.hand.to_s.start_with?("PAD_") && @@active_pool_session["active"]
             if telemetry.stroke_rate.to_f > 0
