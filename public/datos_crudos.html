@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SWiiTroom — Datos en Crudo</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); padding: 18px; }
+    header {
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+      justify-content: space-between; margin-bottom: 16px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--border);
+    }
+    h1 { margin: 0; font-size: 1.25rem; color: var(--accent); }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    button, select, a.btn {
+      background: var(--panel); color: var(--text); border: 1px solid var(--border);
+      padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
+      text-decoration: none;
+    }
+    button:hover, a.btn:hover { border-color: var(--accent); }
+    button.active { background: #0369a1; border-color: var(--accent); }
+    .status { font-size: 0.82rem; color: var(--muted); }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--ok); }
+    .grid { display: grid; grid-template-columns: 320px 1fr; gap: 14px; }
+    @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px; overflow: hidden;
+    }
+    .card h2 { margin: 0 0 10px; font-size: 0.95rem; color: var(--accent); }
+    .tree { font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; line-height: 1.6; }
+    .tree-topic { color: #7dd3fc; font-weight: 600; margin-top: 6px; }
+    .tree-item { padding-left: 14px; color: var(--text); }
+    .tree-val { color: #86efac; }
+    pre {
+      margin: 10px 0 0; background: #020617; border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px; font-size: 0.78rem; max-height: 260px;
+      overflow: auto; color: #cbd5e1;
+    }
+    .table-wrap { overflow-x: auto; max-height: 70vh; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+    th { position: sticky; top: 0; background: #0f172a; color: var(--accent); z-index: 1; }
+    tr:hover { background: rgba(56, 189, 248, 0.08); }
+    .badge { padding: 2px 7px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; }
+    .badge-watch { background: rgba(56, 189, 248, 0.18); color: #7dd3fc; }
+    .badge-pad { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>SWiiTroom — Visor de Datos en Crudo</h1>
+      <div class="status"><span class="dot" id="dot"></span><span id="statusTxt">Conectando...</span></div>
+    </div>
+    <div class="controls">
+      <a class="btn" href="/">← Panel Principal</a>
+      <select id="filtroTipo">
+        <option value="ALL">Todos los dispositivos</option>
+        <option value="WATCH">Solo Smartwatch</option>
+        <option value="PAD">Solo Panel FSR (Piscina)</option>
+      </select>
+      <button id="btnAuto" class="active">Auto-refresco: ON (3s)</button>
+      <button id="btnRefrescar">Actualizar ahora</button>
+      <button id="btnCsv">Descargar CSV</button>
+    </div>
+  </header>
+
+  <div class="grid">
+    <!-- Panel izquierdo estilo árbol de topics MQTT -->
+    <div class="card">
+      <h2>Árbol en Vivo (Último Paquete)</h2>
+      <div class="tree" id="arbolMqtt">Esperando datos...</div>
+      <h2 style="margin-top:14px;">JSON Formateado</h2>
+      <pre id="jsonCrudo">{}</pre>
+    </div>
+
+    <!-- Panel derecho: Tabla ordenada -->
+    <div class="card">
+      <h2>Historial Ordenado (<span id="totalReg">0</span> registros)</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Hora (Perú)</th>
+              <th>Origen</th>
+              <th>Etiqueta / Mano</th>
+              <th>Codo (°)</th>
+              <th>Muñeca (°)</th>
+              <th>Fuerza (N)</th>
+              <th>SPM / T.Cont</th>
+              <th>Batería</th>
+            </tr>
+          </thead>
+          <tbody id="tablaBody">
+            <tr><td colspan="9">Cargando registros...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ENDPOINT = "/api/smartwatch/telemetry";
+    let autoRefresh = true;
+    let registrosActuales = [];
+    let timer = null;
+
+    function esPanelFSR(r) {
+      return String(r.hand || "").toUpperCase().startsWith("PAD_");
+    }
+
+    function formatearHoraPeru(iso) {
+      if (!iso) return "—";
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleString("es-PE", {
+        timeZone: "America/Lima",
+        year: "2-digit", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+      });
+    }
+
+    function extraerRegistros(json) {
+      if (Array.isArray(json)) return json;
+      if (json && Array.isArray(json.telemetries)) return json.telemetries;
+      if (json && Array.isArray(json.data)) return json.data;
+      if (json && Array.isArray(json.history)) return json.history;
+      if (json && Array.isArray(json.records)) return json.records;
+      if (json && typeof json === "object") return [json];
+      return [];
+    }
+
+    function renderizarArbol(ultimo) {
+      if (!ultimo) {
+        document.getElementById("arbolMqtt").textContent = "Sin registros todavía.";
+        document.getElementById("jsonCrudo").textContent = "{}";
+        return;
+      }
+      const esPad = esPanelFSR(ultimo);
+      const base = esPad ? "swiitroom/pool_pad" : "swiitroom/smartwatch";
+      const html = `
+        <div class="tree-topic">▼ ${base}</div>
+        <div class="tree-item">hand: <span class="tree-val">${ultimo.hand ?? "—"}</span></div>
+        <div class="tree-item">force_n: <span class="tree-val">${ultimo.force_n ?? 0} N</span></div>
+        ${esPad ? `
+          <div class="tree-item">contact_time: <span class="tree-val">${ultimo.stroke_rate ?? 0} s</span></div>
+        ` : `
+          <div class="tree-topic">  ▼ angles</div>
+          <div class="tree-item">  elbow_angle: <span class="tree-val">${ultimo.elbow_angle ?? 0}°</span></div>
+          <div class="tree-item">  wrist_angle: <span class="tree-val">${ultimo.shoulder_angle ?? 0}°</span></div>
+          <div class="tree-topic">  ▼ metrics</div>
+          <div class="tree-item">  strokes: <span class="tree-val">${ultimo.strokes ?? 0}</span></div>
+          <div class="tree-item">  stroke_rate: <span class="tree-val">${ultimo.stroke_rate ?? 0} SPM</span></div>
+          <div class="tree-item">  battery: <span class="tree-val">${ultimo.battery ?? "—"}% (${ultimo.battery_voltage ?? "—"} V)</span></div>
+        `}
+      `;
+      document.getElementById("arbolMqtt").innerHTML = html;
+      document.getElementById("jsonCrudo").textContent = JSON.stringify(ultimo, null, 2);
+    }
+
+    function renderizarTabla() {
+      const filtro = document.getElementById("filtroTipo").value;
+      const filtrados = registrosActuales.filter(r => {
+        if (filtro === "PAD") return esPanelFSR(r);
+        if (filtro === "WATCH") return !esPanelFSR(r);
+        return true;
+      });
+
+      document.getElementById("totalReg").textContent = filtrados.length;
+      renderizarArbol(filtrados[0]);
+
+      const tbody = document.getElementById("tablaBody");
+      if (!filtrados.length) {
+        tbody.innerHTML = '<tr><td colspan="9">No hay registros para este filtro.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtrados.slice(0, 200).map(r => {
+        const pad = esPanelFSR(r);
+        return `
+          <tr onclick='renderizarArbol(${JSON.stringify(r).replace(/'/g, "&#39;")})' style="cursor:pointer;">
+            <td>${r.id ?? "—"}</td>
+            <td>${formatearHoraPeru(r.created_at)}</td>
+            <td><span class="badge ${pad ? "badge-pad" : "badge-watch"}">${pad ? "PANEL FSR" : "SMARTWATCH"}</span></td>
+            <td>${r.hand ?? "—"}</td>
+            <td>${pad ? "—" : (r.elbow_angle ?? 0) + "°"}</td>
+            <td>${pad ? "—" : (r.shoulder_angle ?? 0) + "°"}</td>
+            <td><strong>${r.force_n ?? 0}</strong></td>
+            <td>${r.stroke_rate ?? 0}</td>
+            <td>${r.battery != null ? r.battery + "%" : "—"}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    async function cargarDatos() {
+      const dot = document.getElementById("dot");
+      const statusTxt = document.getElementById("statusTxt");
+      try {
+        const res = await fetch(ENDPOINT, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const json = await res.json();
+        registrosActuales = extraerRegistros(json).sort((a, b) => (b.id || 0) - (a.id || 0));
+        renderizarTabla();
+        dot.style.background = "var(--ok)";
+        statusTxt.textContent = "Actualizado: " + new Date().toLocaleTimeString("es-PE");
+      } catch (err) {
+        dot.style.background = "#ef4444";
+        statusTxt.textContent = "Error al leer servidor: " + err.message;
+      }
+    }
+
+    document.getElementById("filtroTipo").addEventListener("change", renderizarTabla);
+    document.getElementById("btnRefrescar").addEventListener("click", cargarDatos);
+    document.getElementById("btnAuto").addEventListener("click", (e) => {
+      autoRefresh = !autoRefresh;
+      e.target.classList.toggle("active", autoRefresh);
+      e.target.textContent = autoRefresh ? "Auto-refresco: ON (3s)" : "Auto-refresco: OFF";
+    });
+    document.getElementById("btnCsv").addEventListener("click", () => {
+      const headers = ["id","created_at","hand","elbow_angle","wrist_angle","force_n","stroke_rate","battery"];
+      const filas = registrosActuales.map(r => [
+        r.id, r.created_at, `"${(r.hand || "").replace(/"/g, '""')}"`,
+        r.elbow_angle ?? "", r.shoulder_angle ?? "", r.force_n ?? "", r.stroke_rate ?? "", r.battery ?? ""
+      ].join(","));
+      const blob = new Blob([[headers.join(","), ...filas].join("\n")], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "swiitroom_datos_crudos.csv";
+      a.click();
+    });
+
+    cargarDatos();
+    timer = setInterval(() => { if (autoRefresh) cargarDatos(); }, 3000);
+  </script>
+</body>
+</html>
