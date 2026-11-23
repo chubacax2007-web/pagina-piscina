@@ -4,6 +4,7 @@ source "https://rubygems.org"
 gem "rails", "~> 8.1.4", ">= 8.1.4.1"
 # Use sqlite3 as the database for Active Record
 gem "pg", "~> 1.1"
+gem "mqtt", "~> 0.6.0"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 
