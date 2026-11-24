@@ -63,33 +63,31 @@
   <header>
     <div>
       <h1>SWiiTroom — Visor de Datos en Crudo</h1>
-      <div class="status"><span class="dot" id="dot"></span><span id="statusTxt">Conectando...</span></div>
+      <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Conectando...</span></div>
     </div>
     <div class="controls">
       <a class="btn" href="/">← Panel Principal</a>
-      <select id="filtroTipo">
+      <select id="deviceFilter">
         <option value="ALL">Todos los dispositivos</option>
         <option value="WATCH">Solo Smartwatch</option>
         <option value="PAD">Solo Panel FSR (Piscina)</option>
       </select>
-      <button id="btnAuto" class="active">Auto-refresco: ON (3s)</button>
-      <button id="btnRefrescar">Actualizar ahora</button>
-      <button id="btnCsv">Descargar CSV</button>
+      <button id="autoRefreshBtn" class="active">Auto-refresco: ON (3s)</button>
+      <button id="refreshNowBtn">Actualizar ahora</button>
+      <button id="downloadCsvBtn">Descargar CSV</button>
     </div>
   </header>
 
   <div class="grid">
-    <!-- Panel izquierdo estilo árbol de topics MQTT -->
     <div class="card">
       <h2>Árbol en Vivo (Último Paquete)</h2>
-      <div class="tree" id="arbolMqtt">Esperando datos...</div>
+      <div class="tree" id="mqttTreeView">Esperando datos...</div>
       <h2 style="margin-top:14px;">JSON Formateado</h2>
-      <pre id="jsonCrudo">{}</pre>
+      <pre id="rawJsonView">{}</pre>
     </div>
 
-    <!-- Panel derecho: Tabla ordenada -->
     <div class="card">
-      <h2>Historial Ordenado (<span id="totalReg">0</span> registros)</h2>
+      <h2>Historial Ordenado (<span id="recordCount">0</span> registros)</h2>
       <div class="table-wrap">
         <table>
           <thead>
@@ -105,7 +103,7 @@
               <th>Batería</th>
             </tr>
           </thead>
-          <tbody id="tablaBody">
+          <tbody id="recordsTableBody">
             <tr><td colspan="9">Cargando registros...</td></tr>
           </tbody>
         </table>
@@ -114,138 +112,184 @@
   </div>
 
   <script>
-    const ENDPOINT = "/api/smartwatch/telemetry";
-    let autoRefresh = true;
-    let registrosActuales = [];
-    let timer = null;
+    const TELEMETRY_ENDPOINT = "/api/smartwatch/telemetry";
+    const STATUS_ENDPOINT    = "/api/smartwatch/status";
 
-    function esPanelFSR(r) {
-      return String(r.hand || "").toUpperCase().startsWith("PAD_");
+    let isAutoRefreshEnabled = true;
+    let currentRecords       = [];
+    let filteredRecords      = [];
+    let liveStatusHistory    = [];
+
+    function isFsrPadRecord(record) {
+      return String(record.hand || "").toUpperCase().startsWith("PAD_");
     }
 
-    function formatearHoraPeru(iso) {
-      if (!iso) return "—";
-      const d = new Date(iso);
-      if (isNaN(d.getTime())) return iso;
-      return d.toLocaleString("es-PE", {
+    function formatPeruTimestamp(isoString) {
+      if (!isoString) return "—";
+      const dateObj = new Date(isoString);
+      if (isNaN(dateObj.getTime())) return isoString;
+      return dateObj.toLocaleString("es-PE", {
         timeZone: "America/Lima",
         year: "2-digit", month: "2-digit", day: "2-digit",
         hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
       });
     }
 
-    function extraerRegistros(json) {
-      if (Array.isArray(json)) return json;
-      if (json && Array.isArray(json.telemetries)) return json.telemetries;
-      if (json && Array.isArray(json.data)) return json.data;
-      if (json && Array.isArray(json.history)) return json.history;
-      if (json && Array.isArray(json.records)) return json.records;
-      if (json && typeof json === "object") return [json];
+    function extractRecords(responseData) {
+      if (Array.isArray(responseData)) return responseData;
+      if (responseData && Array.isArray(responseData.telemetries)) return responseData.telemetries;
+      if (responseData && Array.isArray(responseData.data)) return responseData.data;
+      if (responseData && Array.isArray(responseData.history)) return responseData.history;
+      if (responseData && Array.isArray(responseData.records)) return responseData.records;
+      if (responseData && typeof responseData === "object") return [responseData];
       return [];
     }
 
-    function renderizarArbol(ultimo) {
-      if (!ultimo) {
-        document.getElementById("arbolMqtt").textContent = "Sin registros todavía.";
-        document.getElementById("jsonCrudo").textContent = "{}";
+    function renderTopicTree(record) {
+      const treeEl = document.getElementById("mqttTreeView");
+      const jsonEl = document.getElementById("rawJsonView");
+      if (!record) {
+        treeEl.textContent = "Sin registros todavía.";
+        jsonEl.textContent = "{}";
         return;
       }
-      const esPad = esPanelFSR(ultimo);
-      const base = esPad ? "swiitroom/pool_pad" : "swiitroom/smartwatch";
-      const html = `
-        <div class="tree-topic">▼ ${base}</div>
-        <div class="tree-item">hand: <span class="tree-val">${ultimo.hand ?? "—"}</span></div>
-        <div class="tree-item">force_n: <span class="tree-val">${ultimo.force_n ?? 0} N</span></div>
-        ${esPad ? `
-          <div class="tree-item">contact_time: <span class="tree-val">${ultimo.stroke_rate ?? 0} s</span></div>
+
+      const isPad = isFsrPadRecord(record);
+      const topicBase = isPad ? "swiitroom/pool_pad" : "swiitroom/smartwatch";
+      treeEl.innerHTML = `
+        <div class="tree-topic">▼ ${topicBase}</div>
+        <div class="tree-item">hand: <span class="tree-val">${record.hand ?? "—"}</span></div>
+        <div class="tree-item">force_n: <span class="tree-val">${record.force_n ?? 0} N</span></div>
+        ${isPad ? `
+          <div class="tree-item">contact_time: <span class="tree-val">${record.stroke_rate ?? 0} s</span></div>
         ` : `
           <div class="tree-topic">  ▼ angles</div>
-          <div class="tree-item">  elbow_angle: <span class="tree-val">${ultimo.elbow_angle ?? 0}°</span></div>
-          <div class="tree-item">  wrist_angle: <span class="tree-val">${ultimo.shoulder_angle ?? 0}°</span></div>
+          <div class="tree-item">  elbow_angle: <span class="tree-val">${record.elbow_angle ?? 0}°</span></div>
+          <div class="tree-item">  wrist_angle: <span class="tree-val">${record.shoulder_angle ?? 0}°</span></div>
           <div class="tree-topic">  ▼ metrics</div>
-          <div class="tree-item">  strokes: <span class="tree-val">${ultimo.strokes ?? 0}</span></div>
-          <div class="tree-item">  stroke_rate: <span class="tree-val">${ultimo.stroke_rate ?? 0} SPM</span></div>
-          <div class="tree-item">  battery: <span class="tree-val">${ultimo.battery ?? "—"}% (${ultimo.battery_voltage ?? "—"} V)</span></div>
+          <div class="tree-item">  strokes: <span class="tree-val">${record.strokes ?? 0}</span></div>
+          <div class="tree-item">  stroke_rate: <span class="tree-val">${record.stroke_rate ?? 0} SPM</span></div>
+          <div class="tree-item">  battery: <span class="tree-val">${record.battery ?? "—"}% (${record.battery_voltage ?? "—"} V)</span></div>
         `}
       `;
-      document.getElementById("arbolMqtt").innerHTML = html;
-      document.getElementById("jsonCrudo").textContent = JSON.stringify(ultimo, null, 2);
+      jsonEl.textContent = JSON.stringify(record, null, 2);
     }
 
-    function renderizarTabla() {
-      const filtro = document.getElementById("filtroTipo").value;
-      const filtrados = registrosActuales.filter(r => {
-        if (filtro === "PAD") return esPanelFSR(r);
-        if (filtro === "WATCH") return !esPanelFSR(r);
+    function selectRecordByIndex(index) {
+      if (filteredRecords[index]) {
+        renderTopicTree(filteredRecords[index]);
+      }
+    }
+
+    function renderRecordsTable() {
+      const selectedFilter = document.getElementById("deviceFilter").value;
+      filteredRecords = currentRecords.filter(record => {
+        if (selectedFilter === "PAD") return isFsrPadRecord(record);
+        if (selectedFilter === "WATCH") return !isFsrPadRecord(record);
         return true;
       });
 
-      document.getElementById("totalReg").textContent = filtrados.length;
-      renderizarArbol(filtrados[0]);
+      document.getElementById("recordCount").textContent = filteredRecords.length;
+      renderTopicTree(filteredRecords[0]);
 
-      const tbody = document.getElementById("tablaBody");
-      if (!filtrados.length) {
-        tbody.innerHTML = '<tr><td colspan="9">No hay registros para este filtro.</td></tr>';
+      const tableBody = document.getElementById("recordsTableBody");
+      if (!filteredRecords.length) {
+        tableBody.innerHTML = '<tr><td colspan="9">No hay registros para este filtro.</td></tr>';
         return;
       }
 
-      tbody.innerHTML = filtrados.slice(0, 200).map(r => {
-        const pad = esPanelFSR(r);
+      tableBody.innerHTML = filteredRecords.slice(0, 200).map((record, index) => {
+        const isPad = isFsrPadRecord(record);
         return `
-          <tr onclick='renderizarArbol(${JSON.stringify(r).replace(/'/g, "&#39;")})' style="cursor:pointer;">
-            <td>${r.id ?? "—"}</td>
-            <td>${formatearHoraPeru(r.created_at)}</td>
-            <td><span class="badge ${pad ? "badge-pad" : "badge-watch"}">${pad ? "PANEL FSR" : "SMARTWATCH"}</span></td>
-            <td>${r.hand ?? "—"}</td>
-            <td>${pad ? "—" : (r.elbow_angle ?? 0) + "°"}</td>
-            <td>${pad ? "—" : (r.shoulder_angle ?? 0) + "°"}</td>
-            <td><strong>${r.force_n ?? 0}</strong></td>
-            <td>${r.stroke_rate ?? 0}</td>
-            <td>${r.battery != null ? r.battery + "%" : "—"}</td>
+          <tr onclick="selectRecordByIndex(${index})" style="cursor:pointer;">
+            <td>${record.id ?? "—"}</td>
+            <td>${formatPeruTimestamp(record.created_at)}</td>
+            <td><span class="badge ${isPad ? "badge-pad" : "badge-watch"}">${isPad ? "PANEL FSR" : "SMARTWATCH"}</span></td>
+            <td>${record.hand ?? "—"}</td>
+            <td>${isPad ? "—" : (record.elbow_angle ?? 0) + "°"}</td>
+            <td>${isPad ? "—" : (record.shoulder_angle ?? 0) + "°"}</td>
+            <td><strong>${record.force_n ?? 0}</strong></td>
+            <td>${record.stroke_rate ?? 0}</td>
+            <td>${record.battery != null ? record.battery + "%" : "—"}</td>
           </tr>
         `;
       }).join("");
     }
 
-    async function cargarDatos() {
-      const dot = document.getElementById("dot");
-      const statusTxt = document.getElementById("statusTxt");
+    async function fetchTelemetryData() {
+      const dotEl = document.getElementById("statusDot");
+      const statusEl = document.getElementById("statusText");
+
       try {
-        const res = await fetch(ENDPOINT, { cache: "no-store" });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const json = await res.json();
-        registrosActuales = extraerRegistros(json).sort((a, b) => (b.id || 0) - (a.id || 0));
-        renderizarTabla();
-        dot.style.background = "var(--ok)";
-        statusTxt.textContent = "Actualizado: " + new Date().toLocaleTimeString("es-PE");
-      } catch (err) {
-        dot.style.background = "#ef4444";
-        statusTxt.textContent = "Error al leer servidor: " + err.message;
+        let response = await fetch(TELEMETRY_ENDPOINT, { cache: "no-store" });
+        let usingStatusFallback = false;
+
+        if (!response.ok) {
+          response = await fetch(STATUS_ENDPOINT, { cache: "no-store" });
+          usingStatusFallback = true;
+        }
+        if (!response.ok) throw new Error("HTTP " + response.status);
+
+        const payload = await response.json();
+        if (usingStatusFallback) {
+          const snapshot = {
+            id: liveStatusHistory.length + 1,
+            created_at: new Date().toISOString(),
+            ...payload
+          };
+          const latest = liveStatusHistory[0];
+          const hasChanged = !latest ||
+            latest.hand !== snapshot.hand ||
+            latest.force_n !== snapshot.force_n ||
+            latest.elbow_angle !== snapshot.elbow_angle ||
+            latest.shoulder_angle !== snapshot.shoulder_angle ||
+            latest.pad_peak !== snapshot.pad_peak;
+          if (hasChanged) liveStatusHistory.unshift(snapshot);
+          currentRecords = liveStatusHistory.slice(0, 200);
+        } else {
+          currentRecords = extractRecords(payload).sort((a, b) => (b.id || 0) - (a.id || 0));
+        }
+
+        renderRecordsTable();
+        dotEl.style.background = "var(--ok)";
+        statusEl.textContent = (usingStatusFallback ? "En vivo (/status) • " : "BD (/telemetry) • ")
+          + new Date().toLocaleTimeString("es-PE");
+      } catch (error) {
+        dotEl.style.background = "#ef4444";
+        statusEl.textContent = "Error al leer servidor: " + error.message;
       }
     }
 
-    document.getElementById("filtroTipo").addEventListener("change", renderizarTabla);
-    document.getElementById("btnRefrescar").addEventListener("click", cargarDatos);
-    document.getElementById("btnAuto").addEventListener("click", (e) => {
-      autoRefresh = !autoRefresh;
-      e.target.classList.toggle("active", autoRefresh);
-      e.target.textContent = autoRefresh ? "Auto-refresco: ON (3s)" : "Auto-refresco: OFF";
-    });
-    document.getElementById("btnCsv").addEventListener("click", () => {
-      const headers = ["id","created_at","hand","elbow_angle","wrist_angle","force_n","stroke_rate","battery"];
-      const filas = registrosActuales.map(r => [
-        r.id, r.created_at, `"${(r.hand || "").replace(/"/g, '""')}"`,
-        r.elbow_angle ?? "", r.shoulder_angle ?? "", r.force_n ?? "", r.stroke_rate ?? "", r.battery ?? ""
+    function downloadCsvExport() {
+      const headers = ["id", "created_at", "hand", "elbow_angle", "wrist_angle", "force_n", "stroke_rate", "battery"];
+      const rows = currentRecords.map(record => [
+        record.id,
+        record.created_at,
+        `"${(record.hand || "").replace(/"/g, '""')}"`,
+        record.elbow_angle ?? "",
+        record.shoulder_angle ?? "",
+        record.force_n ?? "",
+        record.stroke_rate ?? "",
+        record.battery ?? ""
       ].join(","));
-      const blob = new Blob([[headers.join(","), ...filas].join("\n")], { type: "text/csv;charset=utf-8;" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "swiitroom_datos_crudos.csv";
-      a.click();
+      const blob = new Blob([[headers.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "swiitroom_datos_crudos.csv";
+      link.click();
+    }
+
+    document.getElementById("deviceFilter").addEventListener("change", renderRecordsTable);
+    document.getElementById("refreshNowBtn").addEventListener("click", fetchTelemetryData);
+    document.getElementById("downloadCsvBtn").addEventListener("click", downloadCsvExport);
+    document.getElementById("autoRefreshBtn").addEventListener("click", (event) => {
+      isAutoRefreshEnabled = !isAutoRefreshEnabled;
+      event.target.classList.toggle("active", isAutoRefreshEnabled);
+      event.target.textContent = isAutoRefreshEnabled ? "Auto-refresco: ON (3s)" : "Auto-refresco: OFF";
     });
 
-    cargarDatos();
-    timer = setInterval(() => { if (autoRefresh) cargarDatos(); }, 3000);
+    fetchTelemetryData();
+    setInterval(() => { if (isAutoRefreshEnabled) fetchTelemetryData(); }, 3000);
   </script>
 </body>
 </html>
