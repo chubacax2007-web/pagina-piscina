@@ -1,9 +1,15 @@
 class DashboardController < ApplicationController
   def index
-    # Aquí Rails pasa los datos iniciales a la vista ERB (atletas, sesiones, estado)
   end
 
   def raw_data
-    @telemetries = Telemetry.order(created_at: :desc).limit(200)
+    @telemetries = if defined?(Telemetry)
+                     Telemetry.order(created_at: :desc).limit(200)
+                   else
+                     []
+                   end
+  rescue => e
+    Rails.logger.warn("[DashboardController#raw_data] #{e.message}")
+    @telemetries = []
   end
 end
