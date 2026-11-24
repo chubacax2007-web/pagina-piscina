@@ -1,0 +1,294 @@
+<% content_for :title, "SWiiTroom — Datos en Crudo" %>
+<% content_for :body_class, "raw-data-body" %>
+
+<% content_for :head do %>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #22c55e;
+    }
+    body.raw-data-body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      padding: 18px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .raw-header {
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+      justify-content: space-between; margin-bottom: 16px;
+      padding-bottom: 12px; border-bottom: 1px solid var(--border);
+    }
+    .raw-header h1 { margin: 0; font-size: 1.25rem; color: var(--accent); font-weight: 700; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .raw-btn, .raw-select {
+      background: var(--panel); color: var(--text); border: 1px solid var(--border);
+      padding: 7px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
+      text-decoration: none;
+    }
+    .raw-btn:hover { border-color: var(--accent); }
+    .raw-btn.active { background: #0369a1; border-color: var(--accent); }
+    .status { font-size: 0.82rem; color: var(--muted); }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--ok); }
+    .raw-grid { display: grid; grid-template-columns: 320px 1fr; gap: 14px; }
+    @media (max-width: 960px) { .raw-grid { grid-template-columns: 1fr; } }
+    .raw-card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px; overflow: hidden;
+    }
+    .raw-card h2 { margin: 0 0 10px; font-size: 0.95rem; color: var(--accent); font-weight: 700; }
+    .tree { font-family: ui-monospace, Consolas, monospace; font-size: 0.82rem; line-height: 1.6; }
+    .tree-topic { color: #7dd3fc; font-weight: 600; margin-top: 6px; }
+    .tree-item { padding-left: 14px; color: var(--text); }
+    .tree-val { color: #86efac; }
+    .raw-pre {
+      margin: 10px 0 0; background: #020617; border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px; font-size: 0.78rem; max-height: 260px;
+      overflow: auto; color: #cbd5e1;
+    }
+    .table-wrap { overflow-x: auto; max-height: 70vh; }
+    .raw-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+    .raw-table th, .raw-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+    .raw-table th { position: sticky; top: 0; background: #0f172a; color: var(--accent); z-index: 1; }
+    .raw-table tr:hover { background: rgba(56, 189, 248, 0.08); }
+    .badge { padding: 2px 7px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; }
+    .badge-watch { background: rgba(56, 189, 248, 0.18); color: #7dd3fc; }
+    .badge-pad { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+  </style>
+<% end %>
+
+<header class="raw-header">
+  <div>
+    <h1>SWiiTroom — Visor de Datos en Crudo</h1>
+    <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Cargado desde Rails • En vivo</span></div>
+  </div>
+  <div class="controls">
+    <%= link_to "← Panel Principal", root_path, class: "raw-btn" %>
+    <select id="deviceFilter" class="raw-select">
+      <option value="ALL">Todos los dispositivos</option>
+      <option value="WATCH">Solo Smartwatch</option>
+      <option value="PAD">Solo Panel FSR (Piscina)</option>
+    </select>
+    <button id="autoRefreshBtn" class="raw-btn active">Auto-refresco: ON (3s)</button>
+    <button id="refreshNowBtn" class="raw-btn">Actualizar ahora</button>
+    <button id="downloadCsvBtn" class="raw-btn">Descargar CSV</button>
+  </div>
+</header>
+
+<div class="raw-grid">
+  <div class="raw-card">
+    <h2>Árbol en Vivo (Último Paquete)</h2>
+    <div class="tree" id="mqttTreeView">Esperando datos...</div>
+    <h2 style="margin-top:14px;">JSON Formateado</h2>
+    <pre class="raw-pre" id="rawJsonView">{}</pre>
+  </div>
+
+  <div class="raw-card">
+    <h2>Historial Ordenado (<span id="recordCount"><%= @telemetries.size %></span> registros)</h2>
+    <div class="table-wrap">
+      <table class="raw-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Hora (Perú)</th>
+            <th>Origen</th>
+            <th>Etiqueta / Mano</th>
+            <th>Codo (°)</th>
+            <th>Muñeca (°)</th>
+            <th>Fuerza (N)</th>
+            <th>SPM / T.Cont</th>
+            <th>Batería</th>
+          </tr>
+        </thead>
+        <tbody id="recordsTableBody">
+          <% if @telemetries.empty? %>
+            <tr><td colspan="9">Sin registros guardados todavía.</td></tr>
+          <% else %>
+            <% @telemetries.each do |record| %>
+              <% is_pad = record.try(:hand).to_s.upcase.start_with?("PAD_") %>
+              <tr>
+                <td><%= record.try(:id) || "—" %></td>
+                <td><%= record.try(:created_at)&.in_time_zone("America/Lima")&.strftime("%d/%m/%y %H:%M:%S") || "—" %></td>
+                <td><span class="badge <%= is_pad ? 'badge-pad' : 'badge-watch' %>"><%= is_pad ? "PANEL FSR" : "SMARTWATCH" %></span></td>
+                <td><%= record.try(:hand) || "—" %></td>
+                <td><%= is_pad ? "—" : "#{record.try(:elbow_angle) || 0}°" %></td>
+                <td><%= is_pad ? "—" : "#{record.try(:shoulder_angle) || 0}°" %></td>
+                <td><strong><%= record.try(:force_n) || 0 %></strong></td>
+                <td><%= record.try(:stroke_rate) || 0 %></td>
+                <td><%= record.try(:battery).nil? ? "—" : "#{record.try(:battery)}%" %></td>
+              </tr>
+            <% end %>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const TELEMETRY_ENDPOINT = "/api/smartwatch/telemetry";
+  const STATUS_ENDPOINT    = "/api/smartwatch/status";
+
+  let isAutoRefreshEnabled = true;
+  let currentRecords       = <%= raw(@telemetries.to_json) %>;
+  let filteredRecords      = [];
+  let liveStatusHistory    = [];
+
+  function isFsrPadRecord(record) {
+    return String(record.hand || "").toUpperCase().startsWith("PAD_");
+  }
+
+  function formatPeruTimestamp(isoString) {
+    if (!isoString) return "—";
+    const dateObj = new Date(isoString);
+    if (isNaN(dateObj.getTime())) return isoString;
+    return dateObj.toLocaleString("es-PE", {
+      timeZone: "America/Lima",
+      year: "2-digit", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+    });
+  }
+
+  function extractRecords(responseData) {
+    if (Array.isArray(responseData)) return responseData;
+    if (responseData && Array.isArray(responseData.telemetries)) return responseData.telemetries;
+    if (responseData && Array.isArray(responseData.data)) return responseData.data;
+    if (responseData && Array.isArray(responseData.history)) return responseData.history;
+    if (responseData && Array.isArray(responseData.records)) return responseData.records;
+    if (responseData && typeof responseData === "object") return [responseData];
+    return [];
+  }
+
+  function renderTopicTree(record) {
+    const treeEl = document.getElementById("mqttTreeView");
+    const jsonEl = document.getElementById("rawJsonView");
+    if (!record) {
+      treeEl.textContent = "Sin registros todavía.";
+      jsonEl.textContent = "{}";
+      return;
+    }
+    const isPad = isFsrPadRecord(record);
+    const topicBase = isPad ? "swiitroom/pool_pad" : "swiitroom/smartwatch";
+    treeEl.innerHTML = `
+      <div class="tree-topic">▼ ${topicBase}</div>
+      <div class="tree-item">hand: <span class="tree-val">${record.hand ?? "—"}</span></div>
+      <div class="tree-item">force_n: <span class="tree-val">${record.force_n ?? 0} N</span></div>
+      ${isPad ? `
+        <div class="tree-item">contact_time: <span class="tree-val">${record.stroke_rate ?? 0} s</span></div>
+      ` : `
+        <div class="tree-topic">  ▼ angles</div>
+        <div class="tree-item">  elbow_angle: <span class="tree-val">${record.elbow_angle ?? 0}°</span></div>
+        <div class="tree-item">  wrist_angle: <span class="tree-val">${record.shoulder_angle ?? 0}°</span></div>
+        <div class="tree-topic">  ▼ metrics</div>
+        <div class="tree-item">  strokes: <span class="tree-val">${record.strokes ?? 0}</span></div>
+        <div class="tree-item">  stroke_rate: <span class="tree-val">${record.stroke_rate ?? 0} SPM</span></div>
+        <div class="tree-item">  battery: <span class="tree-val">${record.battery ?? "—"}%</span></div>
+      `}
+    `;
+    jsonEl.textContent = JSON.stringify(record, null, 2);
+  }
+
+  function selectRecordByIndex(index) {
+    if (filteredRecords[index]) renderTopicTree(filteredRecords[index]);
+  }
+
+  function renderRecordsTable() {
+    const selectedFilter = document.getElementById("deviceFilter").value;
+    filteredRecords = currentRecords.filter(record => {
+      if (selectedFilter === "PAD") return isFsrPadRecord(record);
+      if (selectedFilter === "WATCH") return !isFsrPadRecord(record);
+      return true;
+    });
+
+    document.getElementById("recordCount").textContent = filteredRecords.length;
+    renderTopicTree(filteredRecords[0]);
+
+    const tableBody = document.getElementById("recordsTableBody");
+    if (!filteredRecords.length) {
+      tableBody.innerHTML = '<tr><td colspan="9">No hay registros para este filtro.</td></tr>';
+      return;
+    }
+
+    tableBody.innerHTML = filteredRecords.slice(0, 200).map((record, index) => {
+      const isPad = isFsrPadRecord(record);
+      return `
+        <tr onclick="selectRecordByIndex(${index})" style="cursor:pointer;">
+          <td>${record.id ?? "—"}</td>
+          <td>${formatPeruTimestamp(record.created_at)}</td>
+          <td><span class="badge ${isPad ? "badge-pad" : "badge-watch"}">${isPad ? "PANEL FSR" : "SMARTWATCH"}</span></td>
+          <td>${record.hand ?? "—"}</td>
+          <td>${isPad ? "—" : (record.elbow_angle ?? 0) + "°"}</td>
+          <td>${isPad ? "—" : (record.shoulder_angle ?? 0) + "°"}</td>
+          <td><strong>${record.force_n ?? 0}</strong></td>
+          <td>${record.stroke_rate ?? 0}</td>
+          <td>${record.battery != null ? record.battery + "%" : "—"}</td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  async function fetchTelemetryData() {
+    const dotEl = document.getElementById("statusDot");
+    const statusEl = document.getElementById("statusText");
+    try {
+      let response = await fetch(TELEMETRY_ENDPOINT, { cache: "no-store" });
+      let usingStatusFallback = false;
+      if (!response.ok) {
+        response = await fetch(STATUS_ENDPOINT, { cache: "no-store" });
+        usingStatusFallback = true;
+      }
+      if (!response.ok) throw new Error("HTTP " + response.status);
+
+      const payload = await response.json();
+      if (usingStatusFallback) {
+        const snapshot = { id: liveStatusHistory.length + 1, created_at: new Date().toISOString(), ...payload };
+        const latest = liveStatusHistory[0];
+        const hasChanged = !latest || latest.hand !== snapshot.hand || latest.force_n !== snapshot.force_n ||
+                           latest.elbow_angle !== snapshot.elbow_angle || latest.shoulder_angle !== snapshot.shoulder_angle;
+        if (hasChanged) liveStatusHistory.unshift(snapshot);
+        currentRecords = liveStatusHistory.slice(0, 200);
+      } else {
+        currentRecords = extractRecords(payload).sort((a, b) => (b.id || 0) - (a.id || 0));
+      }
+
+      renderRecordsTable();
+      dotEl.style.background = "var(--ok)";
+      statusEl.textContent = "Actualizado: " + new Date().toLocaleTimeString("es-PE");
+    } catch (error) {
+      dotEl.style.background = "#ef4444";
+      statusEl.textContent = "Error al leer servidor: " + error.message;
+    }
+  }
+
+  function downloadCsvExport() {
+    const headers = ["id", "created_at", "hand", "elbow_angle", "wrist_angle", "force_n", "stroke_rate", "battery"];
+    const rows = currentRecords.map(record => [
+      record.id, record.created_at, `"${(record.hand || "").replace(/"/g, '""')}"`,
+      record.elbow_angle ?? "", record.shoulder_angle ?? "", record.force_n ?? "",
+      record.stroke_rate ?? "", record.battery ?? ""
+    ].join(","));
+    const blob = new Blob([[headers.join(","), ...rows].join("\n")], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "swiitroom_datos_crudos.csv";
+    link.click();
+  }
+
+  document.getElementById("deviceFilter").addEventListener("change", renderRecordsTable);
+  document.getElementById("refreshNowBtn").addEventListener("click", fetchTelemetryData);
+  document.getElementById("downloadCsvBtn").addEventListener("click", downloadCsvExport);
+  document.getElementById("autoRefreshBtn").addEventListener("click", (event) => {
+    isAutoRefreshEnabled = !isAutoRefreshEnabled;
+    event.target.classList.toggle("active", isAutoRefreshEnabled);
+    event.target.textContent = isAutoRefreshEnabled ? "Auto-refresco: ON (3s)" : "Auto-refresco: OFF";
+  });
+
+  renderRecordsTable();
+  fetchTelemetryData();
+  setInterval(() => { if (isAutoRefreshEnabled) fetchTelemetryData(); }, 3000);
+</script>
