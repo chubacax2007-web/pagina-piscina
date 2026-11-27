@@ -14,6 +14,7 @@ let angleChartInstance = null;
 let poolSessionState = { active: false };
 let ascendingTimerInterval = null;
 let pendingSessionPayload = null;
+let isPollingSmartwatch = false;
 let batteryAlertShown = false;
 
 function buildJsonHeaders() {
@@ -32,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   loadInitialData();
   setInterval(pollPoolSessionStatus, 2000);
-  setInterval(pollSmartwatchLive, 1500);
+  setInterval(pollSmartwatchLive, 350);
 });
 
 async function loadInitialData() {
@@ -400,6 +401,8 @@ function exportSessionExcelTable(sessionId) {
 }
 
 async function pollSmartwatchLive() {
+  if (isPollingSmartwatch) return;
+  isPollingSmartwatch = true;
   try {
     const response = await fetch("/api/smartwatch/status", { cache: "no-store" });
     const status = await response.json();
@@ -537,6 +540,8 @@ async function pollSmartwatchLive() {
     }
   } catch (error) {
     console.warn("[pollSmartwatchLive]", error);
+  } finally {
+    isPollingSmartwatch = false;
   }
 }
 
@@ -765,37 +770,46 @@ function renderComparisonChart(sessions) {
 }
 
 function renderSmartwatchCharts(forceLeft, forceRight, angles) {
-  const forceContext = document.getElementById("chartSmartwatchForce").getContext("2d");
-  if (forceChartInstance) forceChartInstance.destroy();
-  forceChartInstance = new Chart(forceContext, {
-    type: "bar",
-    data: {
-      labels: ["Brazada 1", "Brazada 2", "Brazada 3", "Brazada 4", "Brazada 5", "Brazada 6"],
-      datasets: [
-        { label: "Brazo Izquierdo (N)", data: forceLeft, backgroundColor: "#0284c7", borderRadius: 4 },
-        { label: "Brazo Derecho (N)", data: forceRight, backgroundColor: "#059669", borderRadius: 4 }
-      ]
-    },
-    options: { responsive: true, maintainAspectRatio: false }
-  });
+  if (forceChartInstance) {
+    forceChartInstance.data.datasets[0].data = forceLeft;
+    forceChartInstance.data.datasets[1].data = forceRight;
+    forceChartInstance.update("none");
+  } else {
+    const forceContext = document.getElementById("chartSmartwatchForce").getContext("2d");
+    forceChartInstance = new Chart(forceContext, {
+      type: "bar",
+      data: {
+        labels: ["Brazada 1", "Brazada 2", "Brazada 3", "Brazada 4", "Brazada 5", "Brazada 6"],
+        datasets: [
+          { label: "Brazo Izquierdo (N)", data: forceLeft, backgroundColor: "#0284c7", borderRadius: 4 },
+          { label: "Brazo Derecho (N)", data: forceRight, backgroundColor: "#059669", borderRadius: 4 }
+        ]
+      },
+      options: { responsive: true, maintainAspectRatio: false, animation: false }
+    });
+  }
 
-  const angleContext = document.getElementById("chartSmartwatchAngle").getContext("2d");
-  if (angleChartInstance) angleChartInstance.destroy();
-  angleChartInstance = new Chart(angleContext, {
-    type: "line",
-    data: {
-      labels: ["Fase 1 (Entrada)", "Fase 2 (Tracción EVF)", "Fase 3 (Empuje)"],
-      datasets: [{
-        label: "Ángulo Articular (°)",
-        data: angles,
-        borderColor: "#6366f1",
-        backgroundColor: "rgba(99, 102, 241, 0.12)",
-        fill: true,
-        tension: 0.3
-      }]
-    },
-    options: { responsive: true, maintainAspectRatio: false }
-  });
+  if (angleChartInstance) {
+    angleChartInstance.data.datasets[0].data = angles;
+    angleChartInstance.update("none");
+  } else {
+    const angleContext = document.getElementById("chartSmartwatchAngle").getContext("2d");
+    angleChartInstance = new Chart(angleContext, {
+      type: "line",
+      data: {
+        labels: ["Fase 1 (Entrada)", "Fase 2 (Tracción EVF)", "Fase 3 (Empuje)"],
+        datasets: [{
+          label: "Ángulo Articular (°)",
+          data: angles,
+          borderColor: "#6366f1",
+          backgroundColor: "rgba(99, 102, 241, 0.12)",
+          fill: true,
+          tension: 0.3
+        }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, animation: false }
+    });
+  }
 }
 
 function openConfirmModalFromForm() {
