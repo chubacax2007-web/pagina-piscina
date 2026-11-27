@@ -1,0 +1,103 @@
+<!-- TAB 1: HISTORY, COMPARATOR & PDF/EXCEL EXPORTS -->
+<div id="tab-content-progress" class="space-y-6">
+  <div class="grid grid-cols-2 md:grid-cols-6 gap-4">
+    <div class="clean-card p-4 rounded-2xl">
+      <div class="text-[10px] text-slate-400 font-bold uppercase">Atleta Activo</div>
+      <div class="text-base font-black text-slate-900 mt-1 truncate" id="stat-athlete-name">--</div>
+    </div>
+    <div class="clean-card p-4 rounded-2xl">
+      <div class="text-[10px] text-slate-400 font-bold uppercase">Distancia Total</div>
+      <div class="text-xl font-black text-sky-600 mt-1" id="stat-distance">0.00 km</div>
+    </div>
+    <div class="clean-card p-4 rounded-2xl">
+      <div class="text-[10px] text-slate-400 font-bold uppercase">Tiempo Acumulado</div>
+      <div class="text-xl font-black text-indigo-600 mt-1" id="stat-time">0.0 min</div>
+    </div>
+    <div class="clean-card p-4 rounded-2xl">
+      <div class="text-[10px] text-slate-400 font-bold uppercase">Tiempo Reacción Prom.</div>
+      <div class="text-xl font-black text-amber-600 mt-1" id="stat-reaction">0.62 s</div>
+    </div>
+    <div class="clean-card p-4 rounded-2xl">
+      <div class="text-[10px] text-slate-400 font-bold uppercase">Tiempo Vuelta 50m</div>
+      <div class="text-xl font-black text-rose-600 mt-1" id="stat-turn">1.15 s</div>
+    </div>
+    <div class="clean-card p-4 rounded-2xl">
+      <div class="text-[10px] text-slate-400 font-bold uppercase">Frec. Brazada Media</div>
+      <div class="text-xl font-black text-emerald-600 mt-1" id="stat-stroke-rate">55.4 spm</div>
+    </div>
+  </div>
+
+  <div class="clean-card p-5 rounded-3xl space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-4 border-b pb-3">
+      <div>
+        <h3 class="text-sm font-black text-slate-900 flex items-center gap-2">
+          <i data-lucide="sliders" class="w-4 h-4 text-sky-600"></i> Explorador, Comparador y Exportación en Tablas (PDF / Excel)
+        </h3>
+        <p class="text-xs text-slate-500">Filtra sesiones o descarga el Reporte Técnico en PDF y en Tabla Excel (.xlsx) con diseño de tablas y bordes.</p>
+      </div>
+      <div class="flex flex-wrap items-end gap-2.5">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase">Filtrar Estilo</label>
+          <select id="filter-session-style" onchange="applySessionFilters()" class="bg-slate-50 border rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800">
+            <option value="ALL">Todos los Estilos</option>
+            <option value="Crol / Libre">Crol / Libre</option>
+            <option value="Espalda">Espalda</option>
+            <option value="Pecho / Braza">Pecho / Braza</option>
+            <option value="Mariposa">Mariposa</option>
+            <option value="Combinado Individual (CI)">Combinado Individual (CI)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase">Rango Comparación</label>
+          <select id="filter-comparison-mode" onchange="applySessionFilters()" class="bg-sky-50 border border-sky-200 rounded-xl px-3 py-1.5 text-xs font-black text-sky-800">
+            <option value="all">Histórico Completo</option>
+            <option value="prev">Última vs. Anterior</option>
+            <option value="last5">Últimas 5 Sesiones</option>
+          </select>
+        </div>
+        <button onclick="exportSessionPdf()" class="bg-rose-600 hover:bg-rose-700 text-white font-black px-3.5 py-2 rounded-xl text-xs shadow flex items-center gap-1.5">
+          <i data-lucide="file-text" class="w-4 h-4"></i> Exportar Reporte PDF
+        </button>
+        <button onclick="exportSessionExcelTable()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3.5 py-2 rounded-xl text-xs shadow flex items-center gap-1.5">
+          <i data-lucide="table" class="w-4 h-4"></i> Exportar Tabla Excel (.xlsx)
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+      <div class="lg:col-span-8 h-64 w-full relative">
+        <canvas id="chartProgressComparison"></canvas>
+      </div>
+      <div id="comparison-summary-card" class="lg:col-span-4 bg-slate-50 p-4 rounded-2xl border space-y-2 text-xs">
+        <div class="font-black text-slate-800 uppercase text-[11px]">Resumen Técnico y Cinemático</div>
+        <div id="comparison-summary-body" class="space-y-1.5 text-slate-600">
+          Selecciona una sesión de la tabla inferior para inspeccionar sus métricas o exportar su PDF / Tabla Excel.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="clean-card p-6 rounded-3xl space-y-4">
+    <h3 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+      <i data-lucide="calendar-clock" class="w-4 h-4 text-indigo-600"></i> Historial Detallado por Sesión (Incluye T. Reacción, T. Vuelta y Frecuencia SPM)
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="border-b bg-slate-50 text-slate-500 uppercase text-[10px] font-extrabold">
+            <th class="p-3">ID / Fecha</th>
+            <th class="p-3">Estilo / Dist.</th>
+            <th class="p-3">Tiempo Total</th>
+            <th class="p-3">T. Reacción</th>
+            <th class="p-3">T. Vuelta (50m)</th>
+            <th class="p-3">Frec. Brazada</th>
+            <th class="p-3">Codo / Muñeca</th>
+            <th class="p-3">Fuerza (Izq/Der)</th>
+            <th class="p-3 text-right">Descargar Tablas</th>
+          </tr>
+        </thead>
+        <tbody id="sessions-history-tbody" class="divide-y"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
