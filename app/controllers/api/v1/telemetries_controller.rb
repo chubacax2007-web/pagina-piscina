@@ -3,6 +3,8 @@ require 'json'
 module Api
   module V1
     class TelemetriesController < ApplicationController
+      skip_before_action :verify_authenticity_token
+
       DB_FILE = Rails.root.join('db', 'users_db.json')
 
       @@active_pool_session = {
@@ -14,7 +16,7 @@ module Api
       @@last_pad_touch = {
         "pad_side" => "SIN TOQUES",
         "sensor_triggered" => 0,
-        "peak_value" => 0,
+        "peak_value" => 0.0,
         "contact_time" => 0.0,
         "timestamp" => "--:--:--"
       }
@@ -26,7 +28,12 @@ module Api
       def create
         telemetry = Telemetry.new(telemetry_params)
         if telemetry.save
-          MqttPublisher.publish_telemetry(@telemetry)
+          begin
+            MqttPublisher.publish_telemetry(telemetry)
+          rescue => e
+            Rails.logger.warn("[MqttPublisher] #{e.message}")
+          end
+
           # Si el envío proviene de la plataforma FSR, actualiza también el tiempo de contacto en la sesión activa
           if telemetry.hand.to_s.start_with?("PAD_") && @@active_pool_session["active"]
             if telemetry.stroke_rate.to_f > 0
@@ -260,7 +267,7 @@ module Api
       def pool_pad_touch
         pad_side = params[:pad_side] || "VUELTA_50M"
         sensor_num = params[:sensor_triggered].to_i
-        peak_val = params[:peak_value].to_i
+        peak_val = params[:peak_value].to_f.round(2)
         contact_sec = params[:contact_time].to_f.round(2)
 
         @@last_pad_touch = {
@@ -283,7 +290,7 @@ module Api
             if elapsed < 3.0 && pad_side == "SALIDA_META"
               @@active_pool_session["reaction_time"] = [[0.45, elapsed].max, 0.85].min.round(2)
             elsif pad_side == "VUELTA_50M"
-              @@active_pool_session["turn_time"] = (1.05 + (peak_val % 30) * 0.01).round(2)
+              @@active_pool_session["turn_time"] = (1.05 + (peak_val.to_i % 30) * 0.01).round(2)
             end
           end
         end
