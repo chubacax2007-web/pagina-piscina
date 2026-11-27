@@ -1,0 +1,207 @@
+<!-- TAB 2: SMARTWATCH BIOMECHANICS & FSR TURN PLATFORM -->
+<div id="tab-content-smartwatch" class="space-y-6 hidden">
+  <div class="clean-card p-6 rounded-3xl space-y-6">
+    <div class="flex flex-wrap justify-between items-center border-b pb-4 gap-2">
+      <div>
+        <h2 class="text-xl font-black text-slate-900 flex items-center gap-2">
+          <i data-lucide="watch" class="text-sky-600"></i> Biomecánica de Brazada y Plataforma (<span id="smartwatch-athlete-name">Atleta</span>)
+        </h2>
+        <p class="text-xs text-slate-500" id="smartwatch-session-subtitle">Mostrando métricas depuradas de valores atípicos (criterio IQR).</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="smartwatch-badge-live" class="bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full text-xs font-bold">● MPU-9250 9-Axis &amp; FSR Activos</span>
+        <button onclick="exportSessionPdf()" class="bg-rose-600 hover:bg-rose-700 text-white font-black px-3 py-1 rounded-full text-xs flex items-center gap-1">
+          <i data-lucide="file-down" class="w-3.5 h-3.5"></i> PDF
+        </button>
+        <button onclick="exportSessionExcelTable()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3 py-1 rounded-full text-xs flex items-center gap-1">
+          <i data-lucide="table" class="w-3.5 h-3.5"></i> Excel
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Turn Platform Card (FSR Sensors) -->
+    <div class="bg-emerald-50/70 p-4 rounded-2xl border-2 border-emerald-200 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <i data-lucide="gauge" class="w-4 h-4 text-emerald-700"></i>
+          <span class="text-xs font-black uppercase text-emerald-900">Plataforma de Viraje en Vivo (Sensores FSR)</span>
+        </div>
+        <span id="pad-live-badge" class="bg-white border border-emerald-200 text-emerald-800 px-3 py-0.5 rounded-full text-[11px] font-bold">⚪ En espera de contacto</span>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white p-3 rounded-xl border border-emerald-100">
+          <div class="text-[10px] font-bold uppercase text-slate-400">Fuerza de Impulso</div>
+          <div class="text-xl font-black text-emerald-700 mt-0.5" id="pad-live-force-n">0.00 N</div>
+        </div>
+        <div class="bg-white p-3 rounded-xl border border-emerald-100">
+          <div class="text-[10px] font-bold uppercase text-slate-400">Peso Equivalente</div>
+          <div class="text-xl font-black text-sky-700 mt-0.5" id="pad-live-weight-kg">0.00 kg</div>
+        </div>
+        <div class="bg-white p-3 rounded-xl border border-emerald-100">
+          <div class="text-[10px] font-bold uppercase text-slate-400">Tiempo de Contacto</div>
+          <div class="text-xl font-black text-amber-600 mt-0.5" id="pad-live-contact">0.00 s</div>
+        </div>
+        <div class="bg-white p-3 rounded-xl border border-emerald-100">
+          <div class="text-[10px] font-bold uppercase text-slate-400">Zona / Registro</div>
+          <div class="text-xs font-black text-slate-700 mt-1.5" id="pad-live-meta">SIN TOQUES • --:--:--</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- IoT Smartwatch Hardware Status Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-sky-50/60 p-4 rounded-2xl border border-sky-100">
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-600">Mano (GPIO 4):</span>
+        <span id="sw-live-hand" class="text-xs font-black text-sky-800 bg-white px-3 py-1 rounded-full border">Izquierda (Left)</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-600">Batería (RTC):</span>
+        <span id="sw-live-battery" class="text-xs font-black text-emerald-700 bg-white px-3 py-1 rounded-full border">100%</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-600">Frec. Brazada:</span>
+        <span id="sw-live-spm" class="text-xs font-black text-indigo-700 bg-white px-3 py-1 rounded-full border">56.8 braz/min</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-600">Tiempo Activo:</span>
+        <span id="sw-live-uptime" class="text-xs font-mono font-bold text-slate-800 bg-white px-3 py-1 rounded-full border">0 s</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-slate-50 p-4 rounded-2xl border relative">
+        <div class="flex justify-between items-center">
+          <span class="text-[10px] text-slate-500 font-extrabold uppercase">Ángulo Codo (Tracción)</span>
+          <div class="relative tooltip-trigger cursor-pointer">
+            <span class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-black">?</span>
+            <div class="tooltip-box absolute right-0 top-6 w-64 bg-slate-900 text-white p-3 rounded-xl text-[11px] z-50 shadow-xl">
+              <strong>Cálculo Ángulo de Codo:</strong> Estimado con fusión 9-DoF (MPU-9250) desde la referencia de 0° (brazo extendido en línea recta).
+            </div>
+          </div>
+        </div>
+        <div class="text-2xl font-black text-indigo-600 mt-1" id="sw-elbow-avg">0°</div>
+        <div class="text-[11px] text-slate-500 mt-1 font-semibold" id="sw-elbow-disp">Mín: 0° | Máx: 0° (IQR: 0°)</div>
+      </div>
+
+      <div class="bg-slate-50 p-4 rounded-2xl border relative">
+        <div class="flex justify-between items-center">
+          <span class="text-[10px] text-slate-500 font-extrabold uppercase">Ángulo Muñeca (Flexión)</span>
+          <div class="relative tooltip-trigger cursor-pointer">
+            <span class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-black">?</span>
+            <div class="tooltip-box absolute right-0 top-6 w-64 bg-slate-900 text-white p-3 rounded-xl text-[11px] z-50 shadow-xl">
+              <strong>Cálculo Ángulo de Muñeca:</strong> Medido directamente por el smartwatch (MPU-9250) en la muñeca respecto al punto cero (0°) calibrado con la mano recta.
+            </div>
+          </div>
+        </div>
+        <div class="text-2xl font-black text-sky-600 mt-1" id="sw-wrist-avg">0°</div>
+        <div class="text-[11px] text-slate-500 mt-1 font-semibold" id="sw-wrist-disp">Mín: 0° | Máx: 0° (IQR: 0°)</div>
+      </div>
+
+      <div class="bg-slate-50 p-4 rounded-2xl border relative">
+        <div class="flex justify-between items-center">
+          <span class="text-[10px] text-slate-500 font-extrabold uppercase">Fuerza Brazada (Izq / Der)</span>
+          <div class="relative tooltip-trigger cursor-pointer">
+            <span class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-black">?</span>
+            <div class="tooltip-box absolute right-0 top-6 w-64 bg-slate-900 text-white p-3 rounded-xl text-[11px] z-50 shadow-xl">
+              <strong>Cálculo de Fuerza (N):</strong> Estimada combinando aceleración neta dinámica del MPU-9250 (±4g) con filtro de reposo 0 N.
+            </div>
+          </div>
+        </div>
+        <div class="text-2xl font-black text-amber-600 mt-1" id="sw-force-avg">0 N / 0 N</div>
+        <div class="text-[11px] text-slate-500 mt-1 font-semibold" id="sw-force-disp">Rango limpio: 0 - 0 N</div>
+      </div>
+
+      <div class="bg-slate-50 p-4 rounded-2xl border relative">
+        <div class="flex justify-between items-center">
+          <span class="text-[10px] text-slate-500 font-extrabold uppercase">Velocidad, Reacción y Vuelta</span>
+          <div class="relative tooltip-trigger cursor-pointer">
+            <span class="w-4 h-4 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[10px] font-black">?</span>
+            <div class="tooltip-box absolute right-0 top-6 w-64 bg-slate-900 text-white p-3 rounded-xl text-[11px] z-50 shadow-xl">
+              <strong>Sincronización Pads FSR:</strong> Velocidad media (m/s), tiempo de reacción en bloque de salida y tiempo de contacto en pared de vuelta.
+            </div>
+          </div>
+        </div>
+        <div class="text-2xl font-black text-emerald-600 mt-1" id="sw-speed-avg">0.00 m/s</div>
+        <div class="text-[11px] text-slate-500 mt-1 font-semibold" id="sw-speed-disp">Reacción: 0.60s | Vuelta: 1.15s</div>
+      </div>
+    </div>
+
+    <!-- STATIC REFERENCE DIAGRAMS WITH DYNAMIC ANGLE OVERLAY -->
+    <div class="clean-card p-5 rounded-2xl bg-slate-50/70 space-y-3">
+      <div class="flex justify-between items-center">
+        <h3 class="text-xs font-extrabold text-slate-800 uppercase flex items-center gap-2">
+          <i data-lucide="scan-line" class="w-4 h-4 text-indigo-600"></i> Posturas Biomecánicas de Referencia con Ángulo Actualizado (Punto 0° en Muñeca / Brazo Recto)
+        </h3>
+        <span class="text-[11px] text-slate-500">Diagramas estáticos de referencia con superposición dinámica de medición</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-white p-4 rounded-2xl border flex flex-col items-center text-center">
+          <div class="text-xs font-black text-slate-700 mb-2">1. Fase de Entrada y Agarre</div>
+          <svg viewBox="0 0 220 130" class="w-48 h-28">
+            <line x1="10" y1="65" x2="210" y2="65" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4 4"/>
+            <circle cx="70" cy="60" r="10" fill="#64748b"/>
+            <line x1="30" y1="65" x2="85" y2="65" stroke="#334155" stroke-width="6" stroke-linecap="round"/>
+            <line x1="85" y1="65" x2="145" y2="45" stroke="#0284c7" stroke-width="5" stroke-linecap="round"/>
+            <line x1="145" y1="45" x2="190" y2="68" stroke="#0284c7" stroke-width="5" stroke-linecap="round"/>
+            <path d="M 120 53 A 25 25 0 0 1 165 56" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+            <circle cx="145" cy="45" r="4" fill="#dc2626"/>
+          </svg>
+          <div class="mt-2 bg-sky-50 border border-sky-200 px-3 py-1 rounded-full text-xs font-black text-sky-800">
+            Ángulo de Entrada: <span id="ref-angle-entry">0°</span>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border flex flex-col items-center text-center">
+          <div class="text-xs font-black text-slate-700 mb-2">2. Fase de Tracción (Codo y Muñeca)</div>
+          <svg viewBox="0 0 220 130" class="w-48 h-28">
+            <line x1="10" y1="45" x2="210" y2="45" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4 4"/>
+            <circle cx="95" cy="42" r="10" fill="#64748b"/>
+            <line x1="45" y1="48" x2="110" y2="48" stroke="#334155" stroke-width="6" stroke-linecap="round"/>
+            <line x1="110" y1="48" x2="145" y2="68" stroke="#4f46e5" stroke-width="5" stroke-linecap="round"/>
+            <line x1="145" y1="68" x2="145" y2="115" stroke="#4f46e5" stroke-width="5" stroke-linecap="round"/>
+            <path d="M 128 58 A 20 20 0 0 0 145 90" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+            <circle cx="145" cy="68" r="4.5" fill="#dc2626"/>
+          </svg>
+          <div class="mt-2 bg-indigo-50 border border-indigo-200 px-3 py-1 rounded-full text-xs font-black text-indigo-800">
+            Ángulo Codo / Muñeca: <span id="ref-angle-pull">0°</span> / <span id="ref-angle-wrist">0°</span>
+          </div>
+        </div>
+
+        <div class="bg-white p-4 rounded-2xl border flex flex-col items-center text-center">
+          <div class="text-xs font-black text-slate-700 mb-2">3. Fase de Empuje y Salida</div>
+          <svg viewBox="0 0 220 130" class="w-48 h-28">
+            <line x1="10" y1="55" x2="210" y2="55" stroke="#38bdf8" stroke-width="2" stroke-dasharray="4 4"/>
+            <circle cx="135" cy="50" r="10" fill="#64748b"/>
+            <line x1="75" y1="56" x2="145" y2="56" stroke="#334155" stroke-width="6" stroke-linecap="round"/>
+            <line x1="120" y1="56" x2="85" y2="75" stroke="#059669" stroke-width="5" stroke-linecap="round"/>
+            <line x1="85" y1="75" x2="45" y2="68" stroke="#059669" stroke-width="5" stroke-linecap="round"/>
+            <path d="M 102 65 A 22 22 0 0 1 68 72" fill="none" stroke="#dc2626" stroke-width="2.5"/>
+            <circle cx="85" cy="75" r="4" fill="#dc2626"/>
+          </svg>
+          <div class="mt-2 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full text-xs font-black text-emerald-800">
+            Ángulo de Extensión: <span id="ref-angle-push">0°</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div class="lg:col-span-7 clean-card p-5 rounded-2xl space-y-3">
+        <h3 class="text-xs font-extrabold text-slate-800 uppercase flex items-center gap-2">
+          <i data-lucide="activity" class="text-sky-600"></i> Comparativa de Fuerza por Brazada (Brazo Izquierdo vs. Derecho)
+        </h3>
+        <div class="h-60 w-full relative">
+          <canvas id="chartSmartwatchForce"></canvas>
+        </div>
+      </div>
+      <div class="lg:col-span-5 clean-card p-5 rounded-2xl space-y-3">
+        <h3 class="text-xs font-extrabold text-slate-800 uppercase flex items-center gap-2">
+          <i data-lucide="compass" class="text-indigo-600"></i> Curva de Ángulos por Fase de Brazada
+        </h3>
+        <div class="h-60 w-full relative">
+          <canvas id="chartSmartwatchAngle"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
