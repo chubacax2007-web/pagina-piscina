@@ -13,6 +13,8 @@ module Api
         "start_timestamp" => nil, "reaction_time" => 0.62, "turn_time" => 1.18
       }
 
+      @@latest_telemetry = nil
+      @@latest_telemetry_at = nil
       @@last_pad_touch = {
         "pad_side" => "SIN TOQUES",
         "sensor_triggered" => 0,
