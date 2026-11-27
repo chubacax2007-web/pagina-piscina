@@ -30,13 +30,18 @@ module Api
       def create
         telemetry = Telemetry.new(telemetry_params)
         if telemetry.save
-          begin
-            MqttPublisher.publish_telemetry(telemetry)
-          rescue => e
-            Rails.logger.warn("[MqttPublisher] #{e.message}")
+          @@latest_telemetry = telemetry
+          @@latest_telemetry_at = Time.now
+
+          # Publicación MQTT en segundo plano para no frenar la respuesta al ESP32
+          Thread.new do
+            begin
+              MqttPublisher.publish_telemetry(telemetry)
+            rescue => e
+              Rails.logger.warn("[MqttPublisher] #{e.message}")
+            end
           end
 
-          # Si el envío proviene de la plataforma FSR, actualiza también el tiempo de contacto en la sesión activa
           if telemetry.hand.to_s.start_with?("PAD_") && @@active_pool_session["active"]
             if telemetry.stroke_rate.to_f > 0
               @@active_pool_session["turn_time"] = telemetry.stroke_rate.to_f.round(2)
@@ -56,8 +61,9 @@ module Api
       end
 
       def smartwatch_status
-        last = Telemetry.order(created_at: :desc).first
-        connected = last && (Time.now - last.created_at) <= 15
+        last = @@latest_telemetry || Telemetry.order(created_at: :desc).first
+        last_time = @@latest_telemetry_at || last&.created_at
+        connected = last && last_time && (Time.now - last_time) <= 15
 
         render json: {
           connected: !!connected,
@@ -86,7 +92,7 @@ module Api
           pad_time: @@last_pad_touch["timestamp"]
         }
       end
-
+      
       def athletes
         render json: load_db["athletes"]
       end
