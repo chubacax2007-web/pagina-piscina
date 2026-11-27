@@ -1,0 +1,38 @@
+<!-- TAB 4: LEADERBOARD BY STROKE & DISTANCE -->
+<div id="tab-content-leaderboard" class="space-y-6 hidden">
+  <div class="clean-card p-6 rounded-3xl space-y-4">
+    <div class="flex flex-wrap justify-between items-center gap-4 border-b pb-4">
+      <div>
+        <h2 class="text-xl font-black text-slate-900 flex items-center gap-2">
+          <i data-lucide="trophy" class="text-amber-500"></i> Récords y Ranking Oficial por Estilo y Distancia
+        </h2>
+        <p class="text-xs text-slate-500">Comparación justa: cada prueba se clasifica estrictamente dentro de su mismo estilo y metraje.</p>
+      </div>
+      <div class="flex gap-3">
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase">Estilo</label>
+          <select id="rank-filter-style" onchange="renderLeaderboard()" class="bg-slate-50 border rounded-xl px-3 py-2 text-xs font-bold text-indigo-700">
+            <option value="Crol / Libre" selected>Crol / Libre</option>
+            <option value="Espalda">Espalda</option>
+            <option value="Pecho / Braza">Pecho / Braza</option>
+            <option value="Mariposa">Mariposa</option>
+            <option value="Combinado Individual (CI)">Combinado Individual (CI)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold text-slate-500 uppercase">Distancia</label>
+          <select id="rank-filter-distance" onchange="renderLeaderboard()" class="bg-slate-50 border rounded-xl px-3 py-2 text-xs font-bold text-emerald-700">
+            <option value="25 m">25 m</option>
+            <option value="50 m" selected>50 m</option>
+            <option value="100 m">100 m</option>
+            <option value="200 m">200 m</option>
+            <option value="400 m">400 m</option>
+            <option value="500 m">500 m</option>
+            <option value="1 km">1 km</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="space-y-2.5" id="leaderboard-list-container"></div>
+  </div>
+</div>
