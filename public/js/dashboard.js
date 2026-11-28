@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   loadInitialData();
   setInterval(pollPoolSessionStatus, 2000);
-  setInterval(pollSmartwatchLive, 350);
+  setInterval(pollSmartwatchLive, 1000);
 });
 
 async function loadInitialData() {
