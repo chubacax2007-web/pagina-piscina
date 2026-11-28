@@ -13,8 +13,6 @@ module Api
         "start_timestamp" => nil, "reaction_time" => 0.62, "turn_time" => 1.18
       }
 
-      @@latest_telemetry = nil
-      @@latest_telemetry_at = nil
       @@last_pad_touch = {
         "pad_side" => "SIN TOQUES",
         "sensor_triggered" => 0,
@@ -30,9 +28,6 @@ module Api
       def create
         telemetry = Telemetry.new(telemetry_params)
         if telemetry.save
-          @@latest_telemetry = telemetry
-          @@latest_telemetry_at = Time.now
-
           # Publicación MQTT en segundo plano para no frenar la respuesta al ESP32
           Thread.new do
             begin
@@ -61,9 +56,8 @@ module Api
       end
 
       def smartwatch_status
-        last = @@latest_telemetry || Telemetry.order(created_at: :desc).first
-        last_time = @@latest_telemetry_at || last&.created_at
-        connected = last && last_time && (Time.now - last_time) <= 15
+        last = Telemetry.order(created_at: :desc).first
+        connected = last && (Time.now - last.created_at) <= 20
 
         render json: {
           connected: !!connected,
@@ -92,7 +86,7 @@ module Api
           pad_time: @@last_pad_touch["timestamp"]
         }
       end
-      
+
       def athletes
         render json: load_db["athletes"]
       end
